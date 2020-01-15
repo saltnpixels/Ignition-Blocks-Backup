@@ -15,7 +15,7 @@
  * @wordpress-plugin
  * Plugin Name:       Ignition Blocks Backup
  * Plugin URI:        ignition.press
- * Description:       Save your blocks from the theme to a plugin so they dont get lost when the theme changes
+ * Description:       Saves your blocks from the theme to a plugin so they dont get lost when the theme changes
  * Version:           1.0.0
  * Author:            Eric Greenfield
  * Author URI:        saltnpixels.com
@@ -87,11 +87,16 @@ function ign_backup_acf_blocks() {
 	}
 
 	//created folder inside plugin for backing up blocks
-	$target_dir = plugin_dir_path( __FILE__ ) . '/acf-blocks';
-	$wp_filesystem->mkdir( $target_dir );
+	$target_dir = plugin_dir_path( __FILE__ );
+	if(! file_exists($target_dir . '/template-parts')){
+		$wp_filesystem->mkdir( $target_dir . '/template-parts' );
+	}
+
+	$wp_filesystem->mkdir( $target_dir . '/template-parts/acf-blocks' );
+	error_log('created directory');
 
 // Now copy all the files in the theme folder to the target directory.
-	copy_dir( get_template_directory() . '/template-parts/acf-blocks', $target_dir );
+	copy_dir( get_template_directory() . '/template-parts/acf-blocks', $target_dir . '/template-parts/acf-blocks');
 	error_log( 'created backup' );
 
 }
@@ -103,22 +108,23 @@ add_action( 'ign_backup_blocks', 'ign_backup_acf_blocks' );
 
 if(! function_exists('ign_plugin_require_all')){
 	function ign_plugin_require_all( $dir, $depth = 2 ) {
+		if(file_exists($dir)) {
+			foreach ( array_diff( scandir( $dir ), array( '.', '..' ) ) as $filename ) {
+				//check if its a file
+				if ( is_file( $dir . '/' . $filename ) ) {
+					//only include automatically if it starts with an underscore
+					if ( substr( $filename, 0, 1 ) === '_' && strpos( $filename, '.php' ) !== false ) {
+						include_once( $dir . '/' . $filename );
+					}
 
-		foreach ( array_diff( scandir( $dir ), array( '.', '..' ) ) as $filename ) {
-			//check if its a file
-			if ( is_file( $dir . '/' . $filename ) ) {
-				//only include automatically if it starts with an underscore
-				if ( substr( $filename, 0, 1 ) === '_' && strpos( $filename, '.php' ) !== false ) {
-					include_once( $dir . '/' . $filename );
+				} else {
+					//if its not a file its a directory. Look through it for more underscore php partial files
+					if ( $depth > 0 ) {
+						ign_plugin_require_all( $dir . '/' . $filename, $depth - 1 );
+					}
 				}
 
-			} else {
-				//if its not a file its a directory. Look through it for more underscore php partial files
-				if ( $depth > 0 ) {
-					ign_plugin_require_all( $dir . '/' . $filename, $depth - 1 );
-				}
 			}
-
 		}
 	}
 }
@@ -129,11 +135,11 @@ if(! function_exists('ign_plugin_require_all')){
  */
 add_action( 'after_setup_theme', 'ignition_blocks_load' );
 function ignition_blocks_load(){
-	if (!class_exists('ACF')) {
+	if (class_exists('ACF')) {
 		if ( ! file_exists( get_template_directory() . '/template-parts/acf-blocks' ) ) {
 			ign_plugin_require_all( plugin_dir_path( __FILE__ ) );
 
-			$dir = plugin_dir_path( __FILE__ ) . '/acf-blocks';
+			$dir = plugin_dir_path( __FILE__ ) . 'template-parts/acf-blocks';
 			ign_plugin_require_all( $dir );
 		}
 	}
